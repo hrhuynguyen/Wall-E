@@ -103,13 +103,18 @@ class DepthInferenceThread:
 
 
 def compute_3d(u, v, depth_map, f_px):
-    """Compute 3D coordinate (x, y, z) in meters for pixel (u, v)."""
+    """Compute 3D coordinate (x, y, z) in meters for pixel (u, v).
+
+    x = distance from camera (depth)
+    y = horizontal: positive = left, negative = right
+    z = vertical: positive = up (height)
+    """
     H, W = depth_map.shape
     d = float(depth_map[v, u])
     cx, cy = W / 2.0, H / 2.0
-    x_3d = (u - cx) * d / f_px
-    y_3d = (v - cy) * d / f_px
-    return x_3d, y_3d, d
+    y_3d = -((u - cx) * d / f_px)   # left=positive, right=negative
+    z_3d = -((v - cy) * d / f_px)   # up=positive (height)
+    return d, y_3d, z_3d
 
 
 def get_object_depth(x1, y1, x2, y2, depth_map):
@@ -168,7 +173,7 @@ def draw_detection(display, x1, y1, x2, y2, label, xyz, W_frame):
     # Label with class name and depth
     if xyz is not None:
         x_3d, y_3d, z_3d = xyz
-        text = f"{label} ({x_3d*1000:.0f}, {y_3d*1000:.0f}, {z_3d*1000:.0f})mm"
+        text = f"{label} x={x_3d*1000:.0f} y={y_3d*1000:.0f} z={z_3d*1000:.0f}mm"
     else:
         text = label
 
@@ -292,14 +297,14 @@ def main():
                 xyz = None
                 if depth_map is not None and f_px is not None:
                     # Use median depth of the central bbox region for robustness
-                    z = get_object_depth(x1, y1, x2, y2, depth_map)
+                    depth = get_object_depth(x1, y1, x2, y2, depth_map)
                     # Compute 3D position at bbox center
                     cu = int((x1 + x2) / 2)
                     cv_pt = int((y1 + y2) / 2)
                     cx, cy = W_frame / 2.0, H_frame / 2.0
-                    x_3d = (cu - cx) * z / f_px
-                    y_3d = (cv_pt - cy) * z / f_px
-                    xyz = (x_3d, y_3d, z)
+                    y_3d = -((cu - cx) * depth / f_px)   # left=positive, right=negative
+                    z_3d = -((cv_pt - cy) * depth / f_px)  # up=positive (height)
+                    xyz = (depth, y_3d, z_3d)
                 draw_detection(display, x1, y1, x2, y2, label, xyz, W_frame)
 
             # --- FPS counters ---
@@ -334,11 +339,11 @@ def main():
                     display, (u + W_frame, v), (0, 255, 0), cv2.MARKER_CROSS, 20, 2
                 )
                 cv2.putText(
-                    display, f"z={z_3d:.2f}m", (u + 15, v - 10),
+                    display, f"x={x_3d:.2f}m", (u + 15, v - 10),
                     cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 1, cv2.LINE_AA,
                 )
 
-                coord_text = f"Click: x={x_3d:.2f}, y={y_3d:.2f}, z={z_3d:.2f} (meters)"
+                coord_text = f"Click: x={x_3d:.2f}m (dist)  y={y_3d:.2f}m (L+/R-)  z={z_3d:.2f}m (height)"
                 text_y = display.shape[0] - 20
                 cv2.putText(
                     display, coord_text, (10, text_y),
