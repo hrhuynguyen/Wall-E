@@ -1,0 +1,101 @@
+{
+  "metadata": {
+    "robot": "HiWonder xArm S1",
+    "date": "2026-03-16T14:42:12",
+    "units": {
+      "lengths": "mm",
+      "angles": "degrees"
+    }
+  },
+  "servos": {
+    "6": {
+      "name": "Base",
+      "home_position": 494,
+      "position_min": 0,
+      "position_max": 768,
+      "direction": -1,
+      "angle_per_unit": 0.24,
+      "angle_min_deg": 118.6,
+      "angle_max_deg": -65.8,
+      "reference": {
+        "angle_deg": 90.0,
+        "position": 112
+      }
+    },
+    "5": {
+      "name": "Shoulder",
+      "home_position": 500,
+      "position_min": 127,
+      "position_max": 867,
+      "direction": -1,
+      "angle_per_unit": 0.24,
+      "angle_min_deg": 89.5,
+      "angle_max_deg": -88.1,
+      "reference": {
+        "angle_deg": 90.0,
+        "position": 132
+      }
+    },
+    "4": {
+      "name": "Elbow",
+      "home_position": 500,
+      "position_min": 10,
+      "position_max": 990,
+      "direction": 1,
+      "angle_per_unit": 0.24,
+      "angle_min_deg": -117.6,
+      "angle_max_deg": 117.6,
+      "reference": {
+        "angle_deg": 90.0,
+        "position": 867
+      }
+    },
+    "3": {
+      "name": "Wrist Pitch",
+      "home_position": 503,
+      "position_min": 10,
+      "position_max": 970,
+      "direction": -1,
+      "angle_per_unit": 0.24,
+      "angle_min_deg": 118.3,
+      "angle_max_deg": -112.1,
+      "reference": {
+        "angle_deg": 90.0,
+        "position": 139
+      }
+    },
+    "2": {
+      "name": "Wrist Rotation",
+      "home_position": 501,
+      "position_min": 8,
+      "position_max": 971,
+      "direction": -1,
+      "angle_per_unit": 0.24,
+      "angle_min_deg": 118.3,
+      "angle_max_deg": -112.8,
+      "reference": {
+        "angle_deg": 90.0,
+        "position": 91
+      }
+    }
+  },
+  "links": {
+    "L_base": 70.0,
+    "L_shoulder": 100.0,
+    "L_elbow": 96.0,
+    "L_wrist": 57.0,
+    "L_tool": 111.0
+  },
+  "dh_joint_order": [
+    6,
+    5,
+    4,
+    3,
+    2
+  ],
+  "gripper": {
+    "servo_id": 1,
+    "open_position": 200,
+    "closed_position": 600
+  }
+}
