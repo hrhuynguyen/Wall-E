@@ -9,10 +9,11 @@ Pipeline
 --------
 Raw EEG (256 Hz)
   → 60 Hz notch filter              (removes power line interference)
-  → Butterworth bandpass 20–100 Hz   (isolates EMG, kills EEG + drift)
-  → Welford running mean + std       (adaptive baseline, idle-only updates)
+  → Butterworth bandpass 20–100 Hz   (isolates EMG, removes EEG + drift)
+  → Rectification + envelope smooth  (stable amplitude from oscillating EMG)
+  → Welford adaptive baseline        (idle-only updates, never learns clenches)
   → Dual-channel amplitude gate      (TP9 AND TP10 must exceed threshold)
-  → Zero-crossing rate check         (confirms EMG texture, rejects noise)
+  → Zero-crossing rate check         (confirms EMG texture at onset only)
   → State machine with debounce      (onset / hold / release / refractory)
   → on_clench() callback
 """
@@ -44,27 +45,25 @@ NOTCH_FREQ: float = 60.0
 NOTCH_Q: float = 30.0
 
 # Bandpass for jaw EMG (above EEG drift, below Nyquist)
-BP_LO: float = 20.0
-BP_HI: float = 100.0
+BP_LO: float = 15.0
+BP_HI: float = 120.0
 BP_ORDER: int = 4
 
 # Envelope smoothing: moving average after rectification
-# 75 ms ≈ 19 samples at 256 Hz — converts rapid EMG oscillation
-# into a stable envelope that tracks muscle contraction intensity
+# 75 ms ≈ 19 samples — smooths rapid EMG oscillation into stable envelope
 ENVELOPE_WINDOW: int = int(0.075 * FS)
 
 # Adaptive threshold: mean + K * std
-THRESHOLD_K: float = 4.0
+THRESHOLD_K: float = 3.0
 
 # Seconds of quiet data before threshold is valid
-WARMUP_SEC: float = 3.0
+WARMUP_SEC: float = 6.0
 
 # Zero-crossing rate: min crossings per 15-sample block
 ZCR_BLOCK: int = 15
 ZCR_MIN: int = 6
 
-# Minimum threshold floor (µV) — prevents adaptive baseline from
-# cratering during brief quiet stretches and triggering on noise
+# Minimum threshold floor (µV)
 MIN_THRESHOLD: float = 20.0
 
 # State machine timing (ms)
@@ -73,7 +72,6 @@ REFRACTORY_MS: float = 500.0
 MAX_CLENCH_MS: float = 2000.0
 
 # Rolling baseline window (10s at 256 Hz = 2560 samples)
-# Longer window = more stable baseline, less sensitive to brief fluctuations
 BASELINE_WINDOW: int = int(10.0 * FS)
 
 
@@ -103,18 +101,12 @@ def make_bandpass(lo: float = BP_LO, hi: float = BP_HI,
 def make_notch(freq: float = NOTCH_FREQ, q: float = NOTCH_Q,
                fs: int = FS) -> OnlineFilter:
     b, a = iirnotch(freq, q, fs)
-    # Convert ba to sos (single second-order section)
     sos = np.array([[b[0], b[1], b[2], a[0], a[1], a[2]]])
     return OnlineFilter(sos)
 
 
 class EnvelopeSmoother:
-    """Moving average over rectified signal to extract a stable EMG envelope.
-
-    Without this, the filtered EMG oscillates rapidly between peaks and
-    zero crossings (~every 5-10 ms at 50 Hz), making instantaneous
-    amplitude unreliable for thresholding.
-    """
+    """Moving average over rectified signal to extract a stable EMG envelope."""
 
     def __init__(self, window: int = ENVELOPE_WINDOW) -> None:
         self._window = max(window, 1)
@@ -133,8 +125,7 @@ class EnvelopeSmoother:
 class WelfordBaseline:
     """Online mean + std over a sliding window using Welford's algorithm.
 
-    Only call update() during idle periods so clenches never
-    corrupt the baseline they're measured against.
+    Only updated during idle periods so clenches never corrupt the baseline.
     """
 
     def __init__(self, window: int = BASELINE_WINDOW) -> None:
@@ -260,7 +251,7 @@ class JawClenchDetector:
         self._refractory_ms = refractory_ms
         self._verbose = verbose
 
-        # Per-channel: notch → bandpass → rectify → envelope → ZCR
+        # Per-channel: notch → bandpass → envelope → ZCR
         self._notch_tp9 = make_notch()
         self._notch_tp10 = make_notch()
         self._bp_tp9 = make_bandpass()
@@ -276,10 +267,7 @@ class JawClenchDetector:
         self._state = _State.WARMUP
         self._onset_ts = 0.0
         self._state_ts = 0.0
-
         self._clench_count = 0
-        self._last_amp9 = 0.0
-        self._last_amp10 = 0.0
 
     # -------------------------------------------------------------------
     # Core per-sample logic
@@ -300,15 +288,10 @@ class JawClenchDetector:
         f9 = self._bp_tp9.push(n9)
         f10 = self._bp_tp10.push(n10)
 
-        # 3. Rectify + envelope smooth (converts oscillating EMG into
-        #    a stable amplitude envelope that doesn't flicker to zero
-        #    between cycles)
+        # 3. Rectify + envelope smooth
         amp9 = self._env_tp9.push(abs(f9))
         amp10 = self._env_tp10.push(abs(f10))
         amp = max(amp9, amp10)
-
-        self._last_amp9 = amp9
-        self._last_amp10 = amp10
 
         # 4. ZCR texture check (on raw filtered signal, not envelope)
         zcr_ok = self._zcr_tp9.push(f9) and self._zcr_tp10.push(f10)
@@ -318,11 +301,7 @@ class JawClenchDetector:
         dual_gate = (amp9 > thr * 0.70) and (amp10 > thr * 0.70)
         amp_above = (amp > thr) and dual_gate
 
-        # 6. State machine
-        #    ZCR is only required to enter ONSET (prevents noise spikes
-        #    from starting detection). Once in ONSET/ACTIVE, only
-        #    amplitude + dual gate need to hold — ZCR naturally flickers
-        #    sample-to-sample even during a real clench.
+        # 6. State machine (ZCR only required at ONSET entry)
         fired = self._transition(amp_above, zcr_ok, now_ms)
 
         # 7. Update baseline only when idle
@@ -339,11 +318,6 @@ class JawClenchDetector:
                     f"threshold={self._baseline.threshold(self._k):.1f} µV"
                 )
             self._on_warmup_done()
-        
-        if self._verbose and self._state == _State.IDLE:                                    
-            thr = self._baseline.threshold(self._k)                                         
-            print(f"  amp9={amp9:.1f}  amp10={amp10:.1f}  thr={thr:.1f}  zcr={zcr_ok}",     
-        end="\r")     
 
         return fired
 
@@ -356,23 +330,15 @@ class JawClenchDetector:
                 self._state = _State.ONSET
                 self._onset_ts = now_ms
                 self._state_ts = now_ms
-                if self._verbose:
-                    thr = self._baseline.threshold(self._k)
-                    print(f"  [ONSET]  amp9={self._last_amp9:.1f}  amp10={self._last_amp10:.1f}  thr={thr:.1f}")
             return False
 
         if self._state == _State.ONSET:
             if not amp_above:
-                if self._verbose:
-                    thr = self._baseline.threshold(self._k)
-                    print(f"  [DROPPED] amp9={self._last_amp9:.1f}  amp10={self._last_amp10:.1f}  thr={thr:.1f}  70%={thr*0.70:.1f}")
                 self._state = _State.IDLE
                 return False
             if now_ms - self._state_ts >= self._min_hold_ms:
                 self._state = _State.ACTIVE
                 self._state_ts = now_ms
-                if self._verbose:
-                    print(f"  [ACTIVE] held {now_ms - self._onset_ts:.0f} ms")
             return False
 
         if self._state == _State.ACTIVE:
