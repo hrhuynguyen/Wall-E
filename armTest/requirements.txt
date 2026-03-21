@@ -1,0 +1,17 @@
+# xArm S1 robotic arm control
+hidapi>=0.14.0
+
+# Eye tracking (gaze-controlled mouse cursor)
+eyetrax
+pyautogui
+screeninfo
+opencv-python
+
+# Object coordinate extraction (Depth Pro)
+torch
+torchvision
+depth-pro @ git+https://github.com/apple/ml-depth-pro.git
+Pillow
+numpy
+torch
+ultralytics
