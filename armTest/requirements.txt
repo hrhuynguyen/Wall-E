@@ -1,6 +1,3 @@
-# xArm S1 robotic arm control
-hidapi>=0.14.0
-
 # Eye tracking (gaze-controlled mouse cursor)
 eyetrax
 pyautogui
@@ -19,3 +16,8 @@ ultralytics
 # Muse 2 EEG streaming
 muselsl
 pylsl
+
+# Robotics
+hidapi
+numpy
+roboticstoolbox-python
