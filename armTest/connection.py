@@ -21,7 +21,7 @@ HEADER_1 = 0x55
 HEADER_2 = 0x55
 CMD_SERVO_MOVE = 0x03
 CMD_GET_BATTERY_VOLTAGE = 0x0F
-CMD_BEEP = 0x3F
+
 
 
 def find_xarm_devices():
@@ -36,10 +36,10 @@ def find_xarm_devices():
 
 
 def build_packet(cmd: int, data: bytes = b"") -> bytes:
-    """Build an xArm HID command packet (padded to 64 bytes for HID report)."""
+    """Build an xArm HID command packet (65 bytes: 1 report ID + 64 payload)."""
     length = len(data) + 2  # data length + cmd byte + length byte
-    packet = bytes([HEADER_1, HEADER_2, length, cmd]) + data
-    packet = packet.ljust(64, b"\x00")  # pad to 64 bytes for HID
+    packet = bytes([0x00, HEADER_1, HEADER_2, length, cmd]) + data
+    packet = packet.ljust(65, b"\x00")  # 65 bytes: 1 report ID + 64 payload
     return packet
 
 
@@ -114,7 +114,7 @@ def test_connection():
     print()
 
     # Test 2: Move servo to current position (safe no-op movement)
-    print("[Test 2] Sending a no-op servo command (move servo 1 to center, 1500µs, 1000ms)...")
+    print("[Test 2] Sending a no-op servo command (move servo 1 to position 500 (center), 1000 ms)...")
     servo_id = 1
     position = 500  # center-ish position (safe)
     duration = 1000  # 1 second
@@ -128,6 +128,8 @@ def test_connection():
     packet = build_packet(CMD_SERVO_MOVE, data)
     try:
         bytes_written = device.write(packet)
+        if bytes_written < 0:
+            raise IOError(f"device.write() returned {bytes_written}")
         print(f"  Sent {bytes_written} bytes")
         time.sleep(0.1)
         response = device.read(64)
