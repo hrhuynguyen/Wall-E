@@ -15,3 +15,7 @@ Pillow
 numpy
 torch
 ultralytics
+
+# Muse 2 EEG streaming
+muselsl
+pylsl
