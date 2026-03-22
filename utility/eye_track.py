@@ -8,8 +8,10 @@ import pyautogui
 pyautogui.FAILSAFE = False
 pyautogui.PAUSE = 0
 
+WEBCAM_INDEX = 1  # Built-in MacBook webcam
+
 estimator = GazeEstimator()
-run_9_point_calibration(estimator)
+run_9_point_calibration(estimator, camera_index=WEBCAM_INDEX)
 
 estimator.save_model("gaze_model.pkl")
 
@@ -20,9 +22,9 @@ sw, sh = get_screen_size()
 
 kalman = make_kalman()
 smoother = KalmanEMASmoother(kalman, ema_alpha=0.5)
-smoother.tune(estimator)
+smoother.tune(estimator, camera_index=WEBCAM_INDEX)
 
-cap = cv2.VideoCapture(0)
+cap = cv2.VideoCapture(1)  # Built-in MacBook webcam
 
 while True:
     ret, frame = cap.read()

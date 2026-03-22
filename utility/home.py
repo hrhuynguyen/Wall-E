@@ -2,9 +2,10 @@
 
 import json
 import time
-from xarm_hid import XArmHID
+import os
+from utility.xarm_hid import XArmHID
 
-CONFIG_PATH = "xarm_config.json"
+CONFIG_PATH = os.path.join(os.path.dirname(__file__), "xarm_config.json")
 
 def main():
     with open(CONFIG_PATH) as f:

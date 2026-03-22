@@ -36,9 +36,10 @@ from math import atan2, pi, sqrt
 
 import numpy as np
 import roboticstoolbox as rtb
+import os
 from spatialmath import SE3
 
-CONFIG_PATH = "xarm_config.json"
+CONFIG_PATH = os.path.join(os.path.dirname(__file__), "xarm_config.json")
 JOINT_IDS = [6, 5, 4, 3, 2]  # base → wrist, matches dh_joint_order
 
 
@@ -646,7 +647,7 @@ def _cmd_goto(ctrl: XArmController, args: list[str]):
         sys.exit(1)
     ctrl.print_state(result)
 
-    from xarm_hid import XArmHID
+    from utility.xarm_hid import XArmHID
 
     with XArmHID() as arm:
         print("  Moving to target...")
@@ -662,7 +663,7 @@ def _cmd_movej(ctrl: XArmController, args: list[str]):
     print(f"  Target joint angles: {[f'{a:+.1f}' for a in target_deg]}")
     ctrl.print_state(target_deg)
 
-    from xarm_hid import XArmHID
+    from utility.xarm_hid import XArmHID
 
     with XArmHID() as arm:
         print("  Moving to target...")
@@ -695,7 +696,7 @@ def _cmd_line(ctrl: XArmController, args: list[str]):
         p = ctrl.fk_position(traj[i].tolist())
         print(f"    {i:4d}  {p[0]:+8.1f}  {p[1]:+8.1f}  {p[2]:+8.1f}")
 
-    from xarm_hid import XArmHID
+    from utility.xarm_hid import XArmHID
 
     with XArmHID() as arm:
         # Approach start point with single smooth command
@@ -712,7 +713,7 @@ def _cmd_grip(ctrl: XArmController, args: list[str]):
         print("Usage: python xarm_controller.py grip open|close")
         sys.exit(1)
 
-    from xarm_hid import XArmHID
+    from utility.xarm_hid import XArmHID
 
     with XArmHID() as arm:
         if args[0] == "open":

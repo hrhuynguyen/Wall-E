@@ -197,7 +197,7 @@ def draw_detection(display, x1, y1, x2, y2, label, xyz, W_frame):
 
 def main():
     # --- Check checkpoint ---
-    ckpt = Path("./checkpoints/depth_pro.pt")
+    ckpt = Path(__file__).parent / "checkpoints" / "depth_pro.pt"
     if not ckpt.exists():
         print("Checkpoint not found. Run: source get_pretrained_models.sh")
         return
@@ -206,7 +206,10 @@ def main():
     device = get_torch_device()
     print(f"Using device: {device}")
 
+    depth_config = depth_pro.depth_pro.DEFAULT_MONODEPTH_CONFIG_DICT
+    depth_config.checkpoint_uri = str(ckpt)
     depth_model, transform = depth_pro.create_model_and_transforms(
+        config=depth_config,
         device=device,
         precision=torch.half,
     )
