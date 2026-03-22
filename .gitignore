@@ -29,3 +29,6 @@ xarm_config.json
 
 # Claude Code
 .claude/
+armTest/log.md
+armTest/head_tracker.py
+armTest/face_landmarker.task
