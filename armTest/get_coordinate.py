@@ -106,13 +106,13 @@ def compute_3d(u, v, depth_map, f_px):
     """Compute 3D coordinate (x, y, z) in meters for pixel (u, v).
 
     x = distance from camera (depth)
-    y = horizontal: positive = left, negative = right
+    y = horizontal: negative = left, positive = right
     z = vertical: positive = up (height)
     """
     H, W = depth_map.shape
     d = float(depth_map[v, u])
     cx, cy = W / 2.0, H / 2.0
-    y_3d = -((u - cx) * d / f_px)   # left=positive, right=negative
+    y_3d = (u - cx) * d / f_px   # left=negative, right=positive
     z_3d = -((v - cy) * d / f_px)   # up=positive (height)
     return d, y_3d, z_3d
 
@@ -302,7 +302,7 @@ def main():
                     cu = int((x1 + x2) / 2)
                     cv_pt = int((y1 + y2) / 2)
                     cx, cy = W_frame / 2.0, H_frame / 2.0
-                    y_3d = -((cu - cx) * depth / f_px)   # left=positive, right=negative
+                    y_3d = (cu - cx) * depth / f_px   # left=negative, right=positive
                     z_3d = -((cv_pt - cy) * depth / f_px)  # up=positive (height)
                     xyz = (depth, y_3d, z_3d)
                 draw_detection(display, x1, y1, x2, y2, label, xyz, W_frame)
