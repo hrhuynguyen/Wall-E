@@ -207,20 +207,30 @@ class ArmWorker:
         print("[ArmWorker] home reached")
         self._bus.post(Event(HOME_REACHED))
 
+    def _ik_with_fallback(self, xyz: list) -> tuple[list | None, list]:
+        """Try IK; on failure fall back to [260, y, 0] keeping original y."""
+        result = self._ctrl.ik(xyz)
+        if result is not None:
+            return result, xyz
+        fallback = [230.0, xyz[1], 0.0]
+        print(f"[ArmWorker] IK failed for {xyz}, falling back to {fallback}")
+        result = self._ctrl.ik(fallback)
+        return result, fallback
+
     def _do_move_to_xyz(self, xyz: Any) -> None:
         if self._arm is None or self._ctrl is None:
             self._bus.post(Event(ARM_ERROR, "xArm not connected"))
             return
 
-        result = self._ctrl.ik(xyz)
+        result, target = self._ik_with_fallback(list(xyz))
         if result is None:
-            self._bus.post(Event(ARM_ERROR, f"IK failed for {xyz}"))
+            self._bus.post(Event(ARM_ERROR, f"IK failed for {xyz} and fallback"))
             return
 
         with self._hid_lock:
             self._ctrl.move_to(result, self._arm)
-        self._last_xyz = list(xyz)
-        print(f"[ArmWorker] moved to {xyz}")
+        self._last_xyz = list(target)
+        print(f"[ArmWorker] moved to {target}")
         self._bus.post(Event(ARM_MOVE_DONE))
 
     def _do_pick(self, _data: Any) -> None:
@@ -255,14 +265,14 @@ class ArmWorker:
         ]
         print(f"[ArmWorker] lifting from z={self._last_xyz[2]:.1f} to z={lifted_xyz[2]:.1f} mm")
 
-        result = self._ctrl.ik(lifted_xyz)
+        result, target = self._ik_with_fallback(lifted_xyz)
         if result is None:
-            self._bus.post(Event(ARM_ERROR, f"IK failed for lift to {lifted_xyz}"))
+            self._bus.post(Event(ARM_ERROR, f"IK failed for lift and fallback"))
             return
 
         with self._hid_lock:
             self._ctrl.move_to(result, self._arm)
-        self._last_xyz = lifted_xyz
+        self._last_xyz = target
         print(f"[ArmWorker] lift {height_mm}mm done")
         self._bus.post(Event(LIFT_DONE))
 
@@ -279,13 +289,13 @@ class ArmWorker:
                 self._last_xyz[2] - float(height_mm),
             ]
             print(f"[ArmWorker] lowering from z={self._last_xyz[2]:.1f} to z={lowered_xyz[2]:.1f} mm")
-            result = self._ctrl.ik(lowered_xyz)
+            result, target = self._ik_with_fallback(lowered_xyz)
             if result is not None:
                 with self._hid_lock:
                     self._ctrl.move_to(result, self._arm)
-                self._last_xyz = lowered_xyz
+                self._last_xyz = target
             else:
-                print(f"[ArmWorker] IK failed for lower to {lowered_xyz}, dropping in place")
+                print(f"[ArmWorker] IK failed for lower and fallback, dropping in place")
 
         # Open gripper to release object
         with self._hid_lock:

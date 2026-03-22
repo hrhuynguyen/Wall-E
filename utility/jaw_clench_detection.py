@@ -54,10 +54,10 @@ BP_ORDER: int = 4
 ENVELOPE_WINDOW: int = int(0.075 * FS)
 
 # Adaptive threshold: mean + K * std
-THRESHOLD_K: float = 3.0
+THRESHOLD_K: float = 3
 
 # Seconds of quiet data before threshold is valid
-WARMUP_SEC: float = 6.0
+WARMUP_SEC: float = 5.0
 
 # Zero-crossing rate: min crossings per 15-sample block
 ZCR_BLOCK: int = 15
@@ -67,7 +67,7 @@ ZCR_MIN: int = 6
 MIN_THRESHOLD: float = 20.0
 
 # State machine timing (ms)
-MIN_HOLD_MS: float = 30.0
+MIN_HOLD_MS: float = 20.0
 REFRACTORY_MS: float = 500.0
 MAX_CLENCH_MS: float = 2000.0
 

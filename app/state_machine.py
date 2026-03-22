@@ -169,27 +169,24 @@ class StateMachine:
         return []
 
     def _on_scanning(self, event: Event) -> list[Command]:
-        if event.type == OBJECT_SELECTED:
-            self._selected_object = event.data
+        if event.type == JAW_CLENCH:
+            # Clench at any gaze position — orchestrator computes 3D from depth
             self._highlighted_object = None
             self._state = State.ARM_MOVING_TO_OBJ
-            return [Command("move_to_object", event.data)]
+            return [Command("move_to_gaze_point")]
 
         if event.type == GAZE_UPDATE:
             # Gaze highlighting is handled by the orchestrator's vision loop.
-            # It posts OBJECT_SELECTED when clench + highlight coincide.
             pass
 
         return []
 
     def _on_object_highlighted(self, event: Event) -> list[Command]:
-        # This state is managed by the orchestrator's vision loop rather
-        # than pure events, but we handle clench here for clarity.
-        if event.type == JAW_CLENCH and self._highlighted_object:
-            self._selected_object = self._highlighted_object
+        if event.type == JAW_CLENCH:
+            # Clench at any gaze position — orchestrator computes 3D from depth
             self._highlighted_object = None
             self._state = State.ARM_MOVING_TO_OBJ
-            return [Command("move_to_object", self._selected_object)]
+            return [Command("move_to_gaze_point")]
 
         if event.type == GAZE_UPDATE:
             # Orchestrator will call set_highlighted / clear_highlighted

@@ -74,8 +74,7 @@ try:
 
             if xyz is not None:
                 x_val, y_val, z_val = xyz
-                # Negate y: left=negative, right=positive
-                text = f"{label} x={x_val*1000:.0f} y={-y_val*1000:.0f} z={z_val*1000:.0f}mm"
+                text = f"{label} x={x_val*1000:.0f} y={y_val*1000:.0f} z={z_val*1000:.0f}mm"
             else:
                 text = f"{label} {d['confidence']:.0%} (no depth yet)"
 

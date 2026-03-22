@@ -72,6 +72,9 @@ class SessionPage(tk.Frame):
         # -- EEG row --
         self._eeg_label = self._make_row(sidebar, "EEG", "Off")
 
+        # -- Clench indicator --
+        self._clench_label = self._make_row(sidebar, "Clench", "—")
+
         # -- Connect Muse button + status --
         muse_frame = tk.Frame(sidebar, bg=_SURFACE)
         muse_frame.pack(fill="x", padx=16, pady=(8, 0))
@@ -179,6 +182,11 @@ class SessionPage(tk.Frame):
 
     def set_muse_button_enabled(self, enabled: bool) -> None:
         self._muse_btn.configure(state="normal" if enabled else "disabled")
+
+    def flash_clench(self, duration_ms: float) -> None:
+        """Flash the clench indicator green for 500ms."""
+        self._clench_label.configure(text=f"{duration_ms:.0f} ms", fg=_GREEN)
+        self.after(500, lambda: self._clench_label.configure(text="—", fg=_TEXT))
 
     def update_highlight(self, name: str | None) -> None:
         self._highlight_label.configure(text=name or "—")

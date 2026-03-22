@@ -14,11 +14,15 @@ from PIL import Image, ImageTk
 from app.arm_worker import ArmWorker
 from app.camera_thread import CameraThread
 from app.config import (
+    CAM_OFFSET_X_MM,
+    CAM_OFFSET_Y_MM,
+    CAM_Z_FLOOR_MM,
     CAMERA_HEIGHT,
     CAMERA_WIDTH,
     DISPLAY_HEIGHT,
     DISPLAY_WIDTH,
     GAZE_HIGHLIGHT_RADIUS_PX,
+    HEAD_ROTATION_SPEED_DEG_S,
     LIFT_HEIGHT_MM,
     VISION_FPS,
 )
@@ -30,6 +34,7 @@ from app.events import (
     EYE_CALIBRATION_DONE,
     GAZE_UPDATE,
     HEAD_UPDATE,
+    JAW_CLENCH,
     MUSE_CONNECTED,
     MUSE_DISCONNECTED,
     REQUEST_END_SESSION,
@@ -40,7 +45,7 @@ from app.events import (
     EventBus,
 )
 from app.vision import GazeTracker, HeadTracker, ObjectDetector, run_eye_calibration
-from utility.head_tracker import MAX_YAW_INPUT, ROTATION_SPEED_DEG_S
+from utility.head_tracker import MAX_YAW_INPUT
 from app.state_machine import Command, State, StateMachine
 from app.ui.landing_page import LandingPage
 from app.ui.session_page import SessionPage
@@ -320,9 +325,11 @@ class AppWindow(tk.Tk):
             self._session_page.update_muse(False)
         elif event.type == EEG_WARMUP_DONE:
             self._session_page.update_eeg("Active")
+        elif event.type == JAW_CLENCH:
+            self._session_page.flash_clench(event.data or 0)
 
     # ------------------------------------------------------------------
-    # Command dispatch — stubs for now, filled in later steps
+    # Command dispatch
     # ------------------------------------------------------------------
 
     def _dispatch(self, cmd: Command) -> None:
@@ -354,13 +361,70 @@ class AppWindow(tk.Tk):
 
     def _cmd_move_to_object(self, data: object) -> None:
         if isinstance(data, dict) and "xyz" in data:
-            # Vision xyz is (depth_m, y_m, z_m) in meters → convert to mm for arm
-            d_m, y_m, z_m = data["xyz"]
-            xyz_mm = [d_m * 1000, y_m * 1000, z_m * 1000]
-            print(f"[AppWindow] moving arm to {xyz_mm[0]:.0f}, {xyz_mm[1]:.0f}, {xyz_mm[2]:.0f} mm")
-            self._arm_worker.move_to_xyz(xyz_mm)
+            self._move_arm_to_vision_xyz(data["xyz"])
         else:
             print(f"[AppWindow] move_to_object: bad data {data}")
+
+    def _cmd_move_to_gaze_point(self, _data: object) -> None:
+        """Compute 3D coordinate at current gaze pixel from depth map."""
+        gaze = self._gaze_tracker.get_gaze()
+        if gaze is None:
+            print("[AppWindow] no gaze data — cannot select point")
+            self.bus.post(Event(ARM_ERROR, "No gaze data"))
+            return
+
+        depth_map, f_px = self._object_detector.get_depth()
+        if depth_map is None or f_px is None:
+            print("[AppWindow] no depth data — cannot select point")
+            self.bus.post(Event(ARM_ERROR, "No depth data"))
+            return
+
+        # Map screen gaze → camera pixel coordinates
+        sx, sy = gaze
+        canvas = self._session_page.camera_canvas
+        cx = canvas.winfo_rootx()
+        cy = canvas.winfo_rooty()
+        cw = canvas.winfo_width()
+        ch = canvas.winfo_height()
+        if cw <= 0 or ch <= 0:
+            self.bus.post(Event(ARM_ERROR, "Canvas not ready"))
+            return
+
+        H, W = depth_map.shape
+        cam_u = int((sx - cx) * W / cw)
+        cam_v = int((sy - cy) * H / ch)
+        cam_u = max(0, min(W - 1, cam_u))
+        cam_v = max(0, min(H - 1, cam_v))
+
+        # Compute 3D from depth map (same convention as vision.py)
+        d = float(depth_map[cam_v, cam_u])
+        cx_img, cy_img = W / 2.0, H / 2.0
+        y_3d = (cam_u - cx_img) * d / f_px       # left=neg, right=pos
+        z_3d = -((cam_v - cy_img) * d / f_px)     # up=pos
+
+        xyz = (d, y_3d, z_3d)
+        print(f"[AppWindow] gaze point ({cam_u}, {cam_v}) → x={d:.3f}m y={y_3d:.3f}m z={z_3d:.3f}m")
+
+        # Store as selected object for sidebar display
+        self.sm._selected_object = {"label": f"Point ({cam_u},{cam_v})", "xyz": xyz}
+        self._move_arm_to_vision_xyz(xyz)
+
+    def _move_arm_to_vision_xyz(self, xyz: tuple) -> None:
+        """Convert vision xyz (meters) to arm xyz (mm) with offsets, send to arm."""
+        d_m, y_m, z_m = xyz
+        y_mm = y_m * 1000 + CAM_OFFSET_Y_MM
+        # Shrink y toward zero by 1mm (camera-to-arm y bias)
+        if abs(y_mm) > 1.0:
+            y_mm -= 1.0 if y_mm > 0 else -1.0
+        else:
+            y_mm = 0.0
+        xyz_mm = [
+            d_m * 1000 + CAM_OFFSET_X_MM,
+            y_mm,
+            max(z_m * 1000, CAM_Z_FLOOR_MM),
+        ]
+        print(f"[AppWindow] moving arm to {xyz_mm[0]:.0f}, {xyz_mm[1]:.0f}, {xyz_mm[2]:.0f} mm")
+        self._arm_worker.move_to_xyz(xyz_mm)
 
     def _cmd_start_pick_sequence(self, _data: object) -> None:
         self._arm_worker.pick()
@@ -464,7 +528,7 @@ class AppWindow(tk.Tk):
         self._last_head_time = now
 
         fraction = min(abs(yaw_val) / MAX_YAW_INPUT, 1.0)
-        speed = ROTATION_SPEED_DEG_S * fraction
+        speed = HEAD_ROTATION_SPEED_DEG_S * fraction
         sign = 1.0 if yaw_val > 0 else -1.0
         angle_delta = sign * speed * dt
         self._arm_worker.rotate_base_incremental(angle_delta)

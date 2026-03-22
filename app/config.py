@@ -1,12 +1,17 @@
 """Tunable constants for the WallE application."""
 
 # Arm motion
-LIFT_HEIGHT_MM: float = 20.0
+LIFT_HEIGHT_MM: float = 50.0
 ARM_MOVE_DURATION_MS: int = 3000
 GRIPPER_DURATION_MS: int = 1000
 
+# Camera-to-arm calibration offsets (mm)
+CAM_OFFSET_X_MM: float = -30.0
+CAM_OFFSET_Y_MM: float = -5.0
+CAM_Z_FLOOR_MM: float = 0.0
+
 # Head tracking
-HEAD_ROTATION_SPEED_DEG_S: float = 15.0
+HEAD_ROTATION_SPEED_DEG_S: float = 20.0
 CENTER_HOLD_MS: float = 500.0
 
 # Gaze
